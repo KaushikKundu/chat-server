@@ -2,50 +2,65 @@ import { WebSocketServer, WebSocket } from "ws";
 
 const wss = new WebSocketServer({ port: 8080 });
 
-interface User {
-  roomId: string;
-  socket: WebSocket;
-}
-//"room1", new Map([
-//   ["user1", socket1],
-//   ["user2", socket2],
-//   ["user3", socket3],
-// ])
-let userCount = 0;
-let allSockets: User[] = []; // [{roomId:1,socket:ws},{roomId;23,socket:ws},...]
 
-wss.on("connection", (socket) => {
-  userCount++;
-  console.log("user connected: " + userCount);
-  socket.on("message", (message) => {
-    try {
-      const parsedMessage = JSON.parse(message.toString());
-      const { type, payload } = parsedMessage;
-      switch (type) {
-        case "join": {
-          const { roomId } = payload;
-          allSockets.push({ socket, roomId });
-          console.log(`User joined room: ${roomId}`);
-          break;
+const rooms = new Map<string, Set<WebSocket>>();
+
+wss.on("connection", function (socket: WebSocket) {
+    console.log("connected");
+
+    socket.on("message", function (data) {
+        try {
+            const parsedData = JSON.parse(data.toString());
+            const { type, payload } = parsedData;
+            const { roomId } = payload;
+            
+            switch (type) {
+                case "join": {
+                    if (!rooms.has(roomId)) {
+                        rooms.set(roomId, new Set());
+                    }
+                    const usersInRoom = rooms.get(roomId);
+                    if (usersInRoom?.has(socket)) {
+                        socket.send("already in room")
+                        return;
+                    }
+                    usersInRoom?.add( socket);
+                    console.log(`joined room ${roomId}`);
+                    break;
+                }
+                case "chat": {
+                    const { message: chatMessage } = payload;
+                    const usersInRoom = rooms.get(roomId);
+                    console.log(usersInRoom?.entries());
+                    if(!usersInRoom){
+                        console.log("room doesn't exist");
+                        return ;
+                    }
+                    console.log("Broadcasting to:", usersInRoom?.size, "users");
+                    for (const client of usersInRoom) {//socket represents current sender, client means others in room
+                        if (client !== socket && client.readyState === WebSocket.OPEN) {
+                            client.send(chatMessage);
+                        }
+                    }
+                    break;
+                }
+            }
+            for(const [id,clients] of rooms.entries()){
+                console.log(`${id} has ${clients.size}`);
+            }
+        } catch (err) {
+            console.error(err);
         }
-        case "chat": {
-          const sender = allSockets.find((x) => x.socket === socket);
-          if (!sender) return;
-          const { roomId } = sender;
-          const { message: chatMessage } = payload;
-          allSockets
-            .filter(x => x.roomId === roomId && x.socket !== socket)
-            .forEach((user) => {
-              user.socket.send(chatMessage);
-            });
-          break;
+    });
+    socket.on("close",() => {
+        for(const [id,sockets] of rooms.entries() ){
+            if(sockets.delete(socket)){
+                console.log("socket removed from " + id);
+            }
+            if(sockets.size === 0){
+                rooms.delete(id);
+                console.log("room deleted");
+            }
         }
-        default :{
-            console.warn("Wrong type in payload");
-        }
-      }
-    } catch (error) {
-      console.log(error);
-    }
-  });
+    })
 });
