@@ -8,29 +8,36 @@ wss.on("connection", (socket) => {
     userCount++;
     console.log("user connected: " + userCount);
     socket.on("message", (message) => {
-        var _a;
-        const parsedMessage = JSON.parse(message.toString());
         try {
-            if (parsedMessage.type == "join") {
-                const { roomId } = parsedMessage.payload;
-                allSockets.push({
-                    roomId,
-                    socket
-                });
-                console.log("user joined room: " + roomId);
-            }
-            if (parsedMessage.type == "chat") {
-                // find current user roomID
-                const currentUserRoomId = (_a = allSockets.find(x => x.socket === socket)) === null || _a === void 0 ? void 0 : _a.roomId;
-                allSockets.forEach(user => {
-                    if (user.roomId === currentUserRoomId) {
-                        user.socket.send(parsedMessage.payload.message);
-                    }
-                });
+            const parsedMessage = JSON.parse(message.toString());
+            const { type, payload } = parsedMessage;
+            switch (type) {
+                case "join": {
+                    const { roomId } = payload;
+                    allSockets.push({ socket, roomId });
+                    console.log(`User joined room: ${roomId}`);
+                    break;
+                }
+                case "chat": {
+                    const sender = allSockets.find((x) => x.socket === socket);
+                    if (!sender)
+                        return;
+                    const { roomId } = sender;
+                    const { message: chatMessage } = payload;
+                    allSockets
+                        .filter(x => x.roomId === roomId && x.socket !== socket)
+                        .forEach((user) => {
+                        user.socket.send(chatMessage);
+                    });
+                    break;
+                }
+                default: {
+                    console.warn("Wrong type in payload");
+                }
             }
         }
-        catch (err) {
-            console.log(err);
+        catch (error) {
+            console.log(error);
         }
     });
 });
