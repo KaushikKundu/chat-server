@@ -6,7 +6,7 @@ A minimal WebSocket-based chat server that supports room-based messaging and aut
 
 ## 🚀 Features
 
-- Join chat rooms via `roomId`
+- Join chat rooms anonymously via `roomId`
 - Broadcast messages to all clients in the same room (except the sender)
 - Prevent duplicate joins
 - Auto-remove disconnected users from rooms
